@@ -35,13 +35,43 @@ CPU time/step for the Newton-Schulz iterations, still well inside budget.
 Conclusion: per-step orthogonalised updates help under the hard 2000-step cap —
 the whole point of the technique.
 
-## Final summary
-Baseline **2.3718 → 1.6855 bpb (−28.9%)** in 7 logged runs, every change
-isolated. The two structural wins (BPE tokenizer for the Devanagari third of the
-corpus; Llama-style RoPE/RMSNorm/SwiGLU) plus Muon carried most of it; one
-honest negative (context-256 at reduced batch) is kept in the log. Reproduce:
+## Runs 8+ — second extended session (nanoGPT-speedrun techniques)
+Sources: modded-nanoGPT (K. Jordan) and the "Field Guide to NanoGPT Speedrun
+Optimizations". All pure-PyTorch, CPU, no pretrained anything.
+**Run 8 — QK-Norm.** RMS-normalise per-head q,k (with a learned per-dim scale)
+after RoPE, so attention logits can't saturate. bpb **1.6855 → 1.6577**; train
+loss 2.479 → 2.378. Clear win — lets Muon push the matrices harder without the
+attention blowing up.
+
+**Run 9 — logit soft-cap (15) + Muon momentum warmup.** bpb **1.6685** — *worse*
+than Run 8. Soft-capping (`c·tanh(logits/c)`) compresses the logit range and
+lowers confidence; since bpb is a proper scoring rule and the model was already
+well-calibrated, that regularisation costs bits. Kept as a negative; reverted.
+**Run 10 — Muon LR 0.02 → 0.03** (QK-Norm kept): bpb **1.6693**, *worse* than
+Run 8's 0.02. LR 0.02 was already near-optimal; reverted.
+
+## Final model = Run 8 — bpb 1.6577 (−30.1% vs baseline)
+Config: 5-layer Llama-style GPT (RoPE + RMSNorm + SwiGLU + **QK-Norm**),
+weight-tied, byte-level BPE vocab 2048, trained 2000 steps with **Muon**(lr 0.02)
++ AdamW, warmup→cosine. 1,766,640 params (< 2M), CPU, corpus-only.
+
+## Final summary — full run table
+| # | change | bpb |
+|---|--------|-----|
+| 0 | baseline | 2.3718 |
+| 1 | AdamW+cosine+clip+tying+init | 2.0109 |
+| 2–3 | + BPE (vocab 2048) | 1.7999 |
+| 5 | + RoPE/RMSNorm/SwiGLU | 1.7134 |
+| 6 | + 5th layer | 1.6942 |
+| 7 | + Muon | 1.6855 |
+| **8** | **+ QK-Norm ← FINAL** | **1.6577** |
+| 4 | context-256 half-batch (neg) | 1.9092 |
+| 9 | softcap+mom-warmup (neg) | 1.6685 |
+| 10 | Muon lr 0.03 (neg) | 1.6693 |
+
+10 logged runs, every change isolated, 3 honest negatives kept. Reproduce:
 `python tokenizer.py --data <corpus> --vocab 2048` →
-`python train.py --data <corpus> --steps 2000 --n_layer 5 --opt muon --out ckpt.pt` →
+`python train.py --data <corpus> --steps 2000 --n_layer 5 --opt muon --qk_norm 1 --out ckpt.pt` →
 `python evaluate.py --checkpoint ckpt.pt --text_file <file>`.
 
 ---

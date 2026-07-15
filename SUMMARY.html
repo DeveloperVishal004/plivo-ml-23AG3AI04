@@ -40,8 +40,8 @@
 
   <div class="big">
     <div class="kpi"><div class="n">2.3718</div><div class="l">baseline bpb</div></div>
-    <div class="kpi"><div class="n good">1.6855</div><div class="l">final bpb</div></div>
-    <div class="kpi"><div class="n">−28.9%</div><div class="l">reduction</div></div>
+    <div class="kpi"><div class="n good">1.6577</div><div class="l">final bpb</div></div>
+    <div class="kpi"><div class="n">−30.1%</div><div class="l">reduction</div></div>
     <div class="kpi"><div class="n">1.77M</div><div class="l">params (cap 2M)</div></div>
   </div>
 
@@ -52,7 +52,8 @@
     <div class="bar"><div class="lab">+ BPE tokenizer</div><div class="track"><div class="fill" style="width:75.9%"></div></div><div class="val">1.7999</div></div>
     <div class="bar"><div class="lab">+ RoPE/RMSNorm/SwiGLU</div><div class="track"><div class="fill" style="width:72.2%"></div></div><div class="val">1.7134</div></div>
     <div class="bar"><div class="lab">+ 5th layer</div><div class="track"><div class="fill" style="width:71.4%"></div></div><div class="val">1.6942</div></div>
-    <div class="bar"><div class="lab">+ Muon optimizer (final)</div><div class="track"><div class="fill" style="width:71.1%"></div></div><div class="val good">1.6855</div></div>
+    <div class="bar"><div class="lab">+ Muon optimizer</div><div class="track"><div class="fill" style="width:71.1%"></div></div><div class="val">1.6855</div></div>
+    <div class="bar"><div class="lab">+ QK-Norm (final)</div><div class="track"><div class="fill" style="width:69.9%"></div></div><div class="val good">1.6577</div></div>
   </div>
 
   <h2>What changed and why (ablation, one change per run)</h2>
@@ -63,8 +64,9 @@
     <tr><td>2–3</td><td>Byte-level <b>BPE</b> tokenizer (corpus-trained, lossless), vocab 1024→2048</td><td class="n">1.7999</td><td class="n good">−0.211</td></tr>
     <tr><td>5</td><td>Llama-style arch: <b>RoPE</b> + <b>RMSNorm</b> + <b>SwiGLU</b> (fewer params)</td><td class="n">1.7134</td><td class="n good">−0.087</td></tr>
     <tr><td>6</td><td>Spend freed budget on a <b>5th layer</b></td><td class="n">1.6942</td><td class="n good">−0.019</td></tr>
-    <tr><td>7</td><td><b>Muon</b> optimizer on 2-D matrices &nbsp;<b>← final</b></td><td class="n">1.6855</td><td class="n good">−0.009</td></tr>
-    <tr><td>4</td><td>Context 256 at half batch — <i>regressed</i>, kept as an honest negative</td><td class="n">1.9092</td><td class="n bad">+0.109</td></tr>
+    <tr><td>7</td><td><b>Muon</b> optimizer on 2-D matrices</td><td class="n">1.6855</td><td class="n good">−0.009</td></tr>
+    <tr><td>8</td><td><b>QK-Norm</b> on q,k &nbsp;<b>← final</b></td><td class="n">1.6577</td><td class="n good">−0.028</td></tr>
+    <tr><td>4,9,10</td><td>Honest negatives: context-256 half-batch (1.9092), softcap+mom-warmup (1.6685), Muon lr 0.03 (1.6693) — all reverted</td><td class="n">—</td><td class="n bad">reverted</td></tr>
   </table>
 
   <h2>Why this is the right solution</h2>
@@ -72,7 +74,7 @@
   <ul>
     <li><b>Training dynamics</b> — the baseline was badly under-optimized. AdamW + warmup→cosine LR + grad-clip + weight tying + scaled init did the most (−0.36) with no extra params.</li>
     <li><b>Tokenizer</b> — a corpus-trained byte-level BPE (vocab 2048, ~2.35 B/tok) halves sequence length, so each fixed step sees ~2× more text and the window spans ~2× more characters. Lossless (<code>decode(encode(x))==x</code>) with raw-byte fallback for any unseen UTF-8.</li>
-    <li><b>Modern components</b> — RoPE (Su 2021), RMSNorm (Zhang 2019), SwiGLU (Shazeer 2020) lowered bpb <i>and</i> freed params (RoPE has no learned table), paying for a 5th layer; then Muon (Jordan 2024) — orthogonalised momentum updates — beat AdamW under the hard step cap.</li>
+    <li><b>Modern components</b> — RoPE (Su 2021), RMSNorm (Zhang 2019), SwiGLU (Shazeer 2020) lowered bpb <i>and</i> freed params (RoPE has no learned table), paying for a 5th layer; Muon (Jordan 2024) — orthogonalised momentum updates — beat AdamW under the hard step cap; and QK-Norm stopped attention saturating so Muon could push harder.</li>
   </ul>
   <p>Because bpb is measured <b>per byte</b>, the tokenizer gain is genuine compression. Run 4 is an honest negative result: buying context by halving the batch increased gradient noise over the fixed step budget and lost.</p>
 
@@ -80,8 +82,8 @@
   <table>
     <tr><th>Component</th><th>Value</th></tr>
     <tr><td>Architecture</td><td>Decoder-only GPT, Llama-style: 5 layers × 4 heads, n_embd 160, block 128</td></tr>
-    <tr><td>Positions / Norm / MLP</td><td>RoPE / RMSNorm / SwiGLU (hidden 384)</td></tr>
-    <tr><td>Params</td><td>1,766,240 (cap 2,000,000)</td></tr>
+    <tr><td>Positions / Norm / MLP</td><td>RoPE / RMSNorm / SwiGLU (hidden 384) + QK-Norm</td></tr>
+    <tr><td>Params</td><td>1,766,640 (cap 2,000,000)</td></tr>
     <tr><td>Weight tying</td><td>input embedding = output head</td></tr>
     <tr><td>Tokenizer</td><td>byte-level BPE, vocab 2048, corpus-trained, lossless</td></tr>
     <tr><td>Optimizer</td><td>Muon (2-D matrices, lr 0.02, NS-5) + AdamW (embeddings/head/norms, lr 2e-3)</td></tr>
@@ -107,7 +109,7 @@
     </div>
   </div>
 
-  <p class="foot">All numbers from the unmodified <code>evaluate.py</code> on <code>dev_eval.txt</code>. Reproduce: <code>python tokenizer.py --data &lt;corpus&gt; --vocab 2048</code> → <code>python train.py --data &lt;corpus&gt; --steps 2000 --n_layer 5 --opt muon --out ckpt.pt</code> → <code>python evaluate.py --checkpoint ckpt.pt --text_file &lt;file&gt;</code>.</p>
+  <p class="foot">All numbers from the unmodified <code>evaluate.py</code> on <code>dev_eval.txt</code>. Reproduce: <code>python tokenizer.py --data &lt;corpus&gt; --vocab 2048</code> → <code>python train.py --data &lt;corpus&gt; --steps 2000 --n_layer 5 --opt muon --qk_norm 1 --out ckpt.pt</code> → <code>python evaluate.py --checkpoint ckpt.pt --text_file &lt;file&gt;</code>.</p>
 </div>
 </body>
 </html>

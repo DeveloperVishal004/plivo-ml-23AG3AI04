@@ -57,6 +57,9 @@ def main():
     ap.add_argument("--tie", type=int, default=None)       # 1/0 override
     ap.add_argument("--opt", default="adamw")              # adamw | muon
     ap.add_argument("--muon_lr", type=float, default=0.02)
+    ap.add_argument("--qk_norm", type=int, default=0)
+    ap.add_argument("--softcap", type=float, default=0.0)
+    ap.add_argument("--mom_warmup", type=int, default=0)   # Muon momentum 0.85->0.95
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--out", default="ckpt.pt")
     ap.add_argument("--log_every", type=int, default=200)
@@ -78,6 +81,8 @@ def main():
     if args.n_embd is not None:  cfg.n_embd = args.n_embd
     if args.n_head is not None:  cfg.n_head = args.n_head
     if args.tie is not None:     cfg.tie_weights = bool(args.tie)
+    if args.qk_norm:             cfg.qk_norm = True
+    if args.softcap > 0:         cfg.logit_softcap = args.softcap
 
     model = GPT(cfg).to(device)
     n = model.n_params()
@@ -120,6 +125,9 @@ def main():
         for opt, base in opts:
             for g in opt.param_groups:
                 g["lr"] = base * frac
+                if args.mom_warmup and "momentum" in g:  # Muon momentum warmup
+                    w = min(1.0, step / max(1, args.steps // 10))
+                    g["momentum"] = 0.85 + (0.95 - 0.85) * w
         lr = args.lr * frac
         x, y = get_batch(ids, cfg.block_size, args.batch, device)
         _, loss = model(x, y)

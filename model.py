@@ -32,6 +32,8 @@ class Config:
     mlp_type = "swiglu"    # "swiglu" | "gelu"
     mlp_hidden = 384       # SwiGLU hidden (≈ 8/3 * n_embd, rounded)
     rope_base = 10000.0
+    qk_norm = False        # RMS-normalise q,k per head (modded-nanoGPT)
+    logit_softcap = 0.0    # 0 = off; else c*tanh(logits/c)  (Gemma-2)
 
 
 class RMSNorm(nn.Module):
@@ -76,6 +78,11 @@ class SelfAttention(nn.Module):
         self.qkv = nn.Linear(cfg.n_embd, 3 * cfg.n_embd)
         self.proj = nn.Linear(cfg.n_embd, cfg.n_embd)
         self.drop = nn.Dropout(cfg.dropout)
+        self.qk_norm = getattr(cfg, "qk_norm", False)
+        if self.qk_norm:
+            hd = cfg.n_embd // cfg.n_head
+            self.q_scale = nn.Parameter(torch.ones(hd))
+            self.k_scale = nn.Parameter(torch.ones(hd))
         if self.use_rope:
             cos, sin = build_rope(cfg.block_size, cfg.n_embd // cfg.n_head, cfg.rope_base)
             self.register_buffer("rope_cos", cos, persistent=False)
@@ -91,6 +98,9 @@ class SelfAttention(nn.Module):
         if self.use_rope:
             q = apply_rope(q, self.rope_cos, self.rope_sin)
             k = apply_rope(k, self.rope_cos, self.rope_sin)
+        if self.qk_norm:
+            q = q * torch.rsqrt(q.pow(2).mean(-1, keepdim=True) + 1e-6) * self.q_scale
+            k = k * torch.rsqrt(k.pow(2).mean(-1, keepdim=True) + 1e-6) * self.k_scale
         y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         return self.drop(self.proj(y))
@@ -175,6 +185,9 @@ class GPT(nn.Module):
         for blk in self.blocks:
             x = blk(x)
         logits = self.head(self.ln_f(x))
+        cap = getattr(self.cfg, "logit_softcap", 0.0)
+        if cap and cap > 0:
+            logits = cap * torch.tanh(logits / cap)
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)),

@@ -1,0 +1,5 @@
+# experimental checkpoints (only final ckpt.pt is submitted)
+ckpt_run*.pt
+ckpt_baseline.pt
+__pycache__/
+*.pyc

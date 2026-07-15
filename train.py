@@ -60,6 +60,7 @@ def main():
     ap.add_argument("--qk_norm", type=int, default=0)
     ap.add_argument("--softcap", type=float, default=0.0)
     ap.add_argument("--mom_warmup", type=int, default=0)   # Muon momentum 0.85->0.95
+    ap.add_argument("--zloss", type=float, default=0.0)    # PaLM z-loss coefficient
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--out", default="ckpt.pt")
     ap.add_argument("--log_every", type=int, default=200)
@@ -130,7 +131,9 @@ def main():
                     g["momentum"] = 0.85 + (0.95 - 0.85) * w
         lr = args.lr * frac
         x, y = get_batch(ids, cfg.block_size, args.batch, device)
-        _, loss = model(x, y)
+        logits, loss = model(x, y)
+        if args.zloss > 0:   # PaLM z-loss: keep logsumexp(logits) near 0
+            loss = loss + args.zloss * (torch.logsumexp(logits, dim=-1) ** 2).mean()
         for opt, _ in opts:
             opt.zero_grad(set_to_none=True)
         loss.backward()

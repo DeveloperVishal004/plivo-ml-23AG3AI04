@@ -50,7 +50,17 @@ well-calibrated, that regularisation costs bits. Kept as a negative; reverted.
 **Run 10 — Muon LR 0.02 → 0.03** (QK-Norm kept): bpb **1.6693**, *worse* than
 Run 8's 0.02. LR 0.02 was already near-optimal; reverted.
 
+## Runs 11+ — third extended session (structural bets)
+**Run 11 — context 256 at FULL batch 32** (the clean redo of Run 4). bpb
+**1.6551** — a *marginal* −0.0026 over Run 8, at 2.4× the compute. Train loss
+fell far more (2.38 → 2.18) than eval moved: a mild overfitting signal — beyond
+128 tokens the extra context helps memorise training sequences more than it
+helps held-out bits. Conclusion: context is not the bottleneck for this
+data/model size.
+
 ## Final model = Run 8 — bpb 1.6577 (−30.1% vs baseline)
+(Run 11's 1.6551 was within noise at 2.4x compute and showed overfitting, so the
+clean block-128 Run 8 is submitted as `ckpt.pt`.)
 Config: 5-layer Llama-style GPT (RoPE + RMSNorm + SwiGLU + **QK-Norm**),
 weight-tied, byte-level BPE vocab 2048, trained 2000 steps with **Muon**(lr 0.02)
 + AdamW, warmup→cosine. 1,766,640 params (< 2M), CPU, corpus-only.

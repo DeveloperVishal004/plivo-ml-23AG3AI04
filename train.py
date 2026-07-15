@@ -55,6 +55,8 @@ def main():
     ap.add_argument("--n_embd", type=int, default=None)
     ap.add_argument("--n_head", type=int, default=None)
     ap.add_argument("--tie", type=int, default=None)       # 1/0 override
+    ap.add_argument("--opt", default="adamw")              # adamw | muon
+    ap.add_argument("--muon_lr", type=float, default=0.02)
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--out", default="ckpt.pt")
     ap.add_argument("--log_every", type=int, default=200)
@@ -83,28 +85,50 @@ def main():
           f"E{cfg.n_embd} block{cfg.block_size} tie{int(cfg.tie_weights)})")
     assert n <= MAX_PARAMS, f"cap: max {MAX_PARAMS:,} params"
 
-    # AdamW with weight decay only on 2-D weights (not norms/biases/embeddings).
-    decay, no_decay = [], []
-    for pn, p in model.named_parameters():
-        (decay if p.dim() >= 2 else no_decay).append(p)
-    opt = torch.optim.AdamW(
-        [{"params": decay, "weight_decay": args.wd},
-         {"params": no_decay, "weight_decay": 0.0}],
-        lr=args.lr, betas=(0.9, 0.95))
+    # Optimizers. Each entry is (optimizer, base_peak_lr); the cosine schedule
+    # scales every optimizer's LR by the same factor each step.
+    opts = []
+    if args.opt == "muon":
+        from muon import Muon
+        # hidden 2-D matrices -> Muon; embeddings / tied head / norms / biases -> AdamW
+        muon_p, adamw_p = [], []
+        for pn, p in model.named_parameters():
+            if ("blocks" in pn) and p.dim() >= 2:
+                muon_p.append(p)
+            else:
+                adamw_p.append(p)
+        opts.append((Muon(muon_p, lr=args.muon_lr, momentum=0.95), args.muon_lr))
+        opts.append((torch.optim.AdamW(adamw_p, lr=args.lr, betas=(0.9, 0.95),
+                                       weight_decay=0.0), args.lr))
+        print(f"optimizer: Muon on {len(muon_p)} matrices + AdamW on "
+              f"{len(adamw_p)} tensors")
+    else:
+        decay, no_decay = [], []
+        for pn, p in model.named_parameters():
+            (decay if p.dim() >= 2 else no_decay).append(p)
+        opts.append((torch.optim.AdamW(
+            [{"params": decay, "weight_decay": args.wd},
+             {"params": no_decay, "weight_decay": 0.0}],
+            lr=args.lr, betas=(0.9, 0.95)), args.lr))
+        print("optimizer: AdamW")
 
     model.train()
     t0 = time.time()
     losses = []
     for step in range(1, args.steps + 1):
-        lr = lr_at(step, args.steps, args.lr, args.warmup, args.min_lr_frac)
-        for g in opt.param_groups:
-            g["lr"] = lr
+        frac = lr_at(step, args.steps, 1.0, args.warmup, args.min_lr_frac)
+        for opt, base in opts:
+            for g in opt.param_groups:
+                g["lr"] = base * frac
+        lr = args.lr * frac
         x, y = get_batch(ids, cfg.block_size, args.batch, device)
         _, loss = model(x, y)
-        opt.zero_grad(set_to_none=True)
+        for opt, _ in opts:
+            opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-        opt.step()
+        for opt, _ in opts:
+            opt.step()
         losses.append(loss.item())
         if step % args.log_every == 0 or step == 1:
             avg = sum(losses[-args.log_every:]) / len(losses[-args.log_every:])

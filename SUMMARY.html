@@ -9,7 +9,7 @@
   @media (prefers-color-scheme:dark){:root{--bg:#0f1319;--fg:#e6e9ee;--muted:#9aa4b2;--card:#171c24;--line:#2a323d;--accent:#5b8cff}}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  .wrap{max-width:860px;margin:0 auto;padding:40px 22px 80px}
+  .wrap{max-width:880px;margin:0 auto;padding:40px 22px 80px}
   h1{font-size:28px;margin:0 0 4px} h2{font-size:19px;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px}
   .sub{color:var(--muted);margin:0 0 6px}
   .big{display:flex;gap:14px;flex-wrap:wrap;margin:22px 0}
@@ -22,7 +22,7 @@
   code{background:var(--card);padding:1px 6px;border-radius:5px;font-size:13px}
   .chart{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
   .bar{display:flex;align-items:center;gap:10px;margin:7px 0}
-  .bar .lab{width:132px;font-size:13px;color:var(--muted)}
+  .bar .lab{width:150px;font-size:13px;color:var(--muted)}
   .bar .track{flex:1;background:var(--line);border-radius:6px;height:22px;position:relative}
   .bar .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),#7aa2ff)}
   .bar .val{width:56px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
@@ -40,49 +40,52 @@
 
   <div class="big">
     <div class="kpi"><div class="n">2.3718</div><div class="l">baseline bpb</div></div>
-    <div class="kpi"><div class="n good">1.7999</div><div class="l">final bpb</div></div>
-    <div class="kpi"><div class="n">−24.1%</div><div class="l">reduction</div></div>
-    <div class="kpi"><div class="n">1.59M</div><div class="l">params (cap 2M)</div></div>
+    <div class="kpi"><div class="n good">1.6855</div><div class="l">final bpb</div></div>
+    <div class="kpi"><div class="n">−28.9%</div><div class="l">reduction</div></div>
+    <div class="kpi"><div class="n">1.77M</div><div class="l">params (cap 2M)</div></div>
   </div>
 
   <h2>Result at a glance</h2>
   <div class="chart">
     <div class="bar"><div class="lab">Baseline</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">2.3718</div></div>
-    <div class="bar"><div class="lab">+ optimizer/init</div><div class="track"><div class="fill" style="width:84.8%"></div></div><div class="val">2.0109</div></div>
-    <div class="bar"><div class="lab">+ BPE 1024</div><div class="track"><div class="fill" style="width:77.0%"></div></div><div class="val">1.8258</div></div>
-    <div class="bar"><div class="lab">+ BPE 2048 (final)</div><div class="track"><div class="fill" style="width:75.9%"></div></div><div class="val good">1.7999</div></div>
-    <div class="bar"><div class="lab">context 256 (lost)</div><div class="track"><div class="fill" style="width:80.5%;background:var(--bad)"></div></div><div class="val bad">1.9092</div></div>
+    <div class="bar"><div class="lab">+ optimizer/init/tying</div><div class="track"><div class="fill" style="width:84.8%"></div></div><div class="val">2.0109</div></div>
+    <div class="bar"><div class="lab">+ BPE tokenizer</div><div class="track"><div class="fill" style="width:75.9%"></div></div><div class="val">1.7999</div></div>
+    <div class="bar"><div class="lab">+ RoPE/RMSNorm/SwiGLU</div><div class="track"><div class="fill" style="width:72.2%"></div></div><div class="val">1.7134</div></div>
+    <div class="bar"><div class="lab">+ 5th layer</div><div class="track"><div class="fill" style="width:71.4%"></div></div><div class="val">1.6942</div></div>
+    <div class="bar"><div class="lab">+ Muon optimizer (final)</div><div class="track"><div class="fill" style="width:71.1%"></div></div><div class="val good">1.6855</div></div>
   </div>
 
-  <h2>What changed and why (ablation)</h2>
+  <h2>What changed and why (ablation, one change per run)</h2>
   <table>
     <tr><th>#</th><th>Change</th><th>bpb</th><th>Δ</th></tr>
-    <tr><td>0</td><td>Baseline: byte tokenizer, Adam lr=3e-4 constant, no wd/clip/warmup, no weight tying</td><td class="n">2.3718</td><td class="n">—</td></tr>
-    <tr><td>1</td><td>AdamW + warmup+cosine + weight-decay + grad-clip + weight tying + GPT-2 init (byte tok kept)</td><td class="n">2.0109</td><td class="n good">−0.361</td></tr>
-    <tr><td>2</td><td>Byte-level <b>BPE</b> tokenizer, vocab 1024 (corpus-trained, lossless)</td><td class="n">1.8258</td><td class="n good">−0.185</td></tr>
-    <tr><td>3</td><td>BPE vocab 2048 &nbsp;<b>← final</b></td><td class="n">1.7999</td><td class="n good">−0.026</td></tr>
-    <tr><td>4</td><td>Context 256 / batch 16 — regressed (noise&gt;context)</td><td class="n">1.9092</td><td class="n bad">+0.109</td></tr>
+    <tr><td>0</td><td>Baseline: byte tokenizer, Adam lr=3e-4 constant, no wd/clip/warmup, no tying</td><td class="n">2.3718</td><td class="n">—</td></tr>
+    <tr><td>1</td><td>AdamW + warmup+cosine + weight-decay + grad-clip + weight tying + GPT-2 init</td><td class="n">2.0109</td><td class="n good">−0.361</td></tr>
+    <tr><td>2–3</td><td>Byte-level <b>BPE</b> tokenizer (corpus-trained, lossless), vocab 1024→2048</td><td class="n">1.7999</td><td class="n good">−0.211</td></tr>
+    <tr><td>5</td><td>Llama-style arch: <b>RoPE</b> + <b>RMSNorm</b> + <b>SwiGLU</b> (fewer params)</td><td class="n">1.7134</td><td class="n good">−0.087</td></tr>
+    <tr><td>6</td><td>Spend freed budget on a <b>5th layer</b></td><td class="n">1.6942</td><td class="n good">−0.019</td></tr>
+    <tr><td>7</td><td><b>Muon</b> optimizer on 2-D matrices &nbsp;<b>← final</b></td><td class="n">1.6855</td><td class="n good">−0.009</td></tr>
+    <tr><td>4</td><td>Context 256 at half batch — <i>regressed</i>, kept as an honest negative</td><td class="n">1.9092</td><td class="n bad">+0.109</td></tr>
   </table>
 
   <h2>Why this is the right solution</h2>
-  <p>The corpus is <b>14% Devanagari characters but 33% Devanagari <i>bytes</i></b> (each Hindi char = 3 UTF-8 bytes). The given byte tokenizer therefore shreds every Hindi character into 3 tokens, wasting a tiny model's capacity and its fixed 2000-step budget on byte fragments. The two decisive, independent levers were:</p>
+  <p>The corpus is <b>14% Devanagari characters but 33% Devanagari <i>bytes</i></b> (each Hindi char = 3 UTF-8 bytes). Three independent levers, in order of impact:</p>
   <ul>
-    <li><b>Training dynamics</b> — the baseline was badly under-optimized. AdamW + a warmup→cosine LR schedule + gradient clipping + weight tying + proper scaled init did most of the work (−0.36 bpb) with <i>no</i> extra parameters.</li>
-    <li><b>Tokenizer</b> — a corpus-trained byte-level BPE (vocab 2048, ~2.35 bytes/token) roughly halves sequence length, so each step sees ~2× more real text and the window spans ~2× more characters. It is lossless (<code>decode(encode(x))==x</code>) and falls back to raw bytes for any unseen UTF-8, so nothing breaks on the hidden Hindi-heavy test.</li>
+    <li><b>Training dynamics</b> — the baseline was badly under-optimized. AdamW + warmup→cosine LR + grad-clip + weight tying + scaled init did the most (−0.36) with no extra params.</li>
+    <li><b>Tokenizer</b> — a corpus-trained byte-level BPE (vocab 2048, ~2.35 B/tok) halves sequence length, so each fixed step sees ~2× more text and the window spans ~2× more characters. Lossless (<code>decode(encode(x))==x</code>) with raw-byte fallback for any unseen UTF-8.</li>
+    <li><b>Modern components</b> — RoPE (Su 2021), RMSNorm (Zhang 2019), SwiGLU (Shazeer 2020) lowered bpb <i>and</i> freed params (RoPE has no learned table), paying for a 5th layer; then Muon (Jordan 2024) — orthogonalised momentum updates — beat AdamW under the hard step cap.</li>
   </ul>
-  <p>Because bpb is measured <b>per byte</b>, the tokenizer gain is genuine compression, not an accounting artifact. Run 4 shows an honest negative result: buying context by halving the batch increased gradient noise over the fixed step budget and lost — the fix was to keep the full batch.</p>
+  <p>Because bpb is measured <b>per byte</b>, the tokenizer gain is genuine compression. Run 4 is an honest negative result: buying context by halving the batch increased gradient noise over the fixed step budget and lost.</p>
 
   <h2>Final architecture &amp; hyperparameters</h2>
   <table>
     <tr><th>Component</th><th>Value</th></tr>
-    <tr><td>Architecture</td><td>Decoder-only GPT, 4 layers × 4 heads, n_embd 160, block 128</td></tr>
-    <tr><td>Params</td><td>1,585,600 (cap 2,000,000)</td></tr>
+    <tr><td>Architecture</td><td>Decoder-only GPT, Llama-style: 5 layers × 4 heads, n_embd 160, block 128</td></tr>
+    <tr><td>Positions / Norm / MLP</td><td>RoPE / RMSNorm / SwiGLU (hidden 384)</td></tr>
+    <tr><td>Params</td><td>1,766,240 (cap 2,000,000)</td></tr>
     <tr><td>Weight tying</td><td>input embedding = output head</td></tr>
-    <tr><td>Init</td><td>N(0, 0.02); residual projections ×1/√(2·n_layer)</td></tr>
     <tr><td>Tokenizer</td><td>byte-level BPE, vocab 2048, corpus-trained, lossless</td></tr>
-    <tr><td>Optimizer</td><td>AdamW(betas 0.9/0.95, wd 0.1 on 2-D weights)</td></tr>
-    <tr><td>LR schedule</td><td>peak 2e-3, 150-step warmup → cosine → 10%</td></tr>
-    <tr><td>Batch / steps</td><td>32 / 2000, grad-clip 1.0, seed 1337, CPU</td></tr>
+    <tr><td>Optimizer</td><td>Muon (2-D matrices, lr 0.02, NS-5) + AdamW (embeddings/head/norms, lr 2e-3)</td></tr>
+    <tr><td>Schedule</td><td>150-step warmup → cosine → 10%, grad-clip 1.0, batch 32, 2000 steps, CPU</td></tr>
   </table>
 
   <h2>Human vs. coding-agent split</h2>
@@ -90,21 +93,21 @@
     <div><b>Human (candidate)</b>
       <ul>
         <li>Chose the LLM track and the overall strategy</li>
-        <li>Directed the hypothesis order: fix optimization first, then tokenizer, then context</li>
-        <li>Decided to ship Run 3 and treat Run 4 as an informative negative</li>
+        <li>Set the hypothesis order: optimizer → tokenizer → architecture → optimizer-2</li>
+        <li>Decided which runs to ship and kept the failed context run as evidence</li>
         <li>Owns the reasoning for the 5-minute discussion</li>
       </ul>
     </div>
     <div><b>Coding agent</b>
       <ul>
-        <li>Wrote the BPE trainer/encoder, model init/tying, and the AdamW+schedule trainer</li>
-        <li>Ran the ablations, logged bpb, verified caps &amp; losslessness</li>
+        <li>Implemented the BPE trainer, RoPE/RMSNorm/SwiGLU, and the Muon optimizer in pure PyTorch</li>
+        <li>Ran the 7 ablations, logged bpb, verified caps &amp; losslessness</li>
         <li>Produced RUNLOG.md, NOTES.md, and this page</li>
       </ul>
     </div>
   </div>
 
-  <p class="foot">All numbers from the unmodified <code>evaluate.py</code> on <code>dev_eval.txt</code>. Reproduce: <code>python tokenizer.py --data &lt;corpus&gt; --vocab 2048</code> then <code>python train.py --data &lt;corpus&gt; --steps 2000 --out ckpt.pt</code> then <code>python evaluate.py --checkpoint ckpt.pt --text_file &lt;file&gt;</code>.</p>
+  <p class="foot">All numbers from the unmodified <code>evaluate.py</code> on <code>dev_eval.txt</code>. Reproduce: <code>python tokenizer.py --data &lt;corpus&gt; --vocab 2048</code> → <code>python train.py --data &lt;corpus&gt; --steps 2000 --n_layer 5 --opt muon --out ckpt.pt</code> → <code>python evaluate.py --checkpoint ckpt.pt --text_file &lt;file&gt;</code>.</p>
 </div>
 </body>
 </html>

@@ -1,5 +1,9 @@
-# experimental checkpoints (only final ckpt.pt is submitted)
+# experiment checkpoints (only the final ckpt.pt is submitted)
 ckpt_run*.pt
 ckpt_baseline.pt
+ckpt_SAFE_*.pt
+# local backups / caches
+*.py.bak
 __pycache__/
 *.pyc
+.DS_Store
